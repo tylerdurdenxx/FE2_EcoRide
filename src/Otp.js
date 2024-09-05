@@ -39,27 +39,29 @@ const Otp = () => {
 
     setOtp(newOtp);
   };
-
   const handleVerifyOtp = async () => {
     const otpCode = otp.join('');
     setIsSubmitting(true);
-
+  
     try {
       const response = await axios.post('https://ecoride1-backend.onrender.com/api/user/verify', {
         email,
         verificationCode: otpCode,
       });
-
+  
       console.log('OTP Verification Response:', response.data);
-
+  
       if (response.data.token) {
         const tempUser = await AsyncStorage.getItem('tempUser');
         const parsedUser = tempUser ? JSON.parse(tempUser) : null;
-
+  
         if (parsedUser) {
+          // Create a final user data object with the token
           const finalUserData = { ...parsedUser, token: response.data.token };
+          
+          // Store the final user data with the token in AsyncStorage
           await AsyncStorage.setItem('user', JSON.stringify(finalUserData));
-
+  
           // Navigate to the Home screen with the token
           navigation.navigate('Home', { token: response.data.token });
         } else {
@@ -75,6 +77,7 @@ const Otp = () => {
       setIsSubmitting(false);
     }
   };
+  
 
   return (
     <View style={styles.container}>

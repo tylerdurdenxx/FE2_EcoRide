@@ -1,15 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Image, Alert, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
-import MapView, { Marker,Callout } from 'react-native-maps';
+import MapView, { Marker, Callout } from 'react-native-maps';
 import { Camera } from 'expo-camera';
 import { BarCodeScanner } from 'expo-barcode-scanner';
 import * as Location from 'expo-location';
 import axios from 'axios';
 import { Stopwatch } from 'react-native-stopwatch-timer';
 import Toast from 'react-native-toast-message';
+import Icon from 'react-native-vector-icons/FontAwesome';
+import HamburgerMenu from './HamburgerMenu';
 
 
-const Home = ({ route }) => {
+const Home = ({ route, navigation }) => {
   const [stations, setStations] = useState([]);
   const [selectedStation, setSelectedStation] = useState(null);
   const [rideState, setRideState] = useState('scan');
@@ -24,7 +26,9 @@ const Home = ({ route }) => {
   const [loading, setLoading] = useState(true);
   const mapRef = useRef(null);
   const { token } = route.params;
-console.log(token)
+  const { email } = route.params;
+  // console.log('home email', email)
+  // console.log('home token', token)
   // Timer states
   const [rideTimerStart, setRideTimerStart] = useState(true);
   const [rideTimerReset, setRideTimerReset] = useState(false);
@@ -57,7 +61,7 @@ console.log(token)
             'Authorization': `Bearer ${token}`,
           },
         });
-        
+
         const stationsData = response.data;
         setStations(stationsData);
 
@@ -76,7 +80,7 @@ console.log(token)
         }
       });
 
-      console.log('Station details:', response.data);
+      // console.log('Station details:', response.data);
       setSelectedStation(response.data); // Store the selected station's details in state
     } catch (error) {
       console.error('Error fetching station details:', error);
@@ -85,7 +89,7 @@ console.log(token)
 
 
 
-  
+
   useEffect(() => {
     const getPermissions = async () => {
       const { status } = await Camera.requestCameraPermissionsAsync();
@@ -117,14 +121,14 @@ console.log(token)
 
     if (hasPermission) {
       setRideState('scanQRCode');
-    } 
+    }
     if (rideState === 'scanReturnDock') {
       // Stop the timer when 'SCAN TO LOCK' is clicked
       setIsTimerRunning(false);
       // setRideState('scan'); 
       setTimer(0); // Reset the timer
     }
-    
+
     else {
       Alert.alert('Permission Required', 'Camera permission is needed to scan QR codes.');
     }
@@ -143,8 +147,6 @@ console.log(token)
 
       const { dockId, status, bikeId, stationName } = response.data;
       setDockId(dockId);
-      // Shorten bikeId and update rideDetails
-      // const shortenedBikeId = shortenBikeId(bikeId);
       setRideDetails({ bikeId, stationName });
 
       if (status === 'occupied') {
@@ -157,13 +159,28 @@ console.log(token)
         setRideState('scan');
       }
     } catch (error) {
+      let errorMessage = 'An error occurred. Please try again.';
+
+      if (error.response) {
+        // Server responded with a status other than 2xx
+        errorMessage = error.response.data.message || error.response.data || 'Server Error';
+      } else if (error.request) {
+        // Request was made but no response was received
+        errorMessage = 'No response received from the server.';
+      } else {
+        // Something happened in setting up the request
+        errorMessage = error.message;
+      }
+
+      // Show the error in the toast
       Toast.show({
         type: 'error',
-        text1: 'TRY ANOTHER DOCK',
-        text2: error.response ? error.response.data : error.message,
+        text1: 'OOPS!',
+        text2: errorMessage,
         position: 'center',
         visibilityTime: 5000,
       });
+
       if (error.response && error.response.status === 404) {
         Alert.alert('Error', 'Dock not found. Please try again.');
       }
@@ -172,6 +189,7 @@ console.log(token)
       setScanned(false);
     }
   };
+
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -194,7 +212,7 @@ console.log(token)
           },
         }
       );
-      console.log('Start ride response:', response.data);  // Check if bikeId is present here
+      // console.log('Start ride response:', response.data);  // Check if bikeId is present here
       Toast.show({
         type: 'info',
         text1: 'RIDE IN PROGRESS',
@@ -216,7 +234,7 @@ console.log(token)
       Alert.alert('Error', 'No dock selected for returning the bike.');
       return;
     }
-  
+
     try {
       const response = await axios.post(
         'https://ecoride1-backend.onrender.com/api/home/ride/end',
@@ -227,19 +245,25 @@ console.log(token)
           },
         }
       );
-      
-      const { fare } = response.data;
-  
-      // Show toast with the fare
+    //   const fare = response.data.transaction?.fare; // Safe access to fare
+    // //  const fareMessage = fare !== undefined && fare !== null ? `Fare: $${fare.toFixed(2)}`;
+
+      const { fare } = response.data.transaction;
+      // const fareD = fare !== undefined && fare !== null ? fare : '0 fare has been deducted from your wallet';
+      const fareD = fare !== undefined && fare !== null && fare > 0 
+      ? `${fare.toFixed(2)} PKR has been deducted from your wallet`
+      : '0 PKR has been deducted from your wallet';
+      // console.log('fare',fareD)
+      // // Show toast with the fare
       Toast.show({
         type: 'info',
-        text1: 'RIDE ENDED',
-        text2: `${fare.toFixed(2)} PKR has been dedeucted from your wallet`, // Adjust format as needed
+        text1: fareD,
+        // text2: 'RIDE ENDED',
         position: 'center',
         visibilityTime: 7000,
       });
-  
-      console.log('End ride response:', response.data);
+
+      // console.log('End ride response:', response.data);
       setRideTimerStart(false);
       setRideTimerReset(true);
       setTotalTimerStart(false);
@@ -251,16 +275,32 @@ console.log(token)
       Alert.alert('Error', 'Failed to end the ride.');
     }
   };
-  
+
   const bikeLocations = [
-    { id: 'station1', latitude: location ? location.latitude + 0.001 : 24.916668, longitude: location ? location.longitude + 0.001 : 67.090528 },
-    { id: 'station2', latitude: location ? location.latitude + 0.002 : 24.917668, longitude: location ? location.longitude + 0.002 : 67.091528 }
+    { id: 'station1', latitude: 24.9153953, longitude:  67.0928285 },
+    { id: 'station2', latitude:  24.9151976, longitude: 67.0917123 }
   ];
- 
+
 
   return (
     <View style={styles.container}>
- 
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+        <Icon
+          onPress={() => navigation.navigate('HamburgerMenu', { token, email })}
+          name="bars"
+          size={30}
+          color="black"
+          style={{
+            margin: 10,
+            padding: 5,
+            // Any other styles you want to apply
+          }}
+        />
+        <Text style={{ color: "#28303C",fontSize: 18,
+    fontWeight: 'bold', }}>Make your ride smart.</Text>
+      </View>
+
+
       {loading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="black" />
@@ -277,20 +317,21 @@ console.log(token)
             />
           )}
 
+
           {rideState !== 'scanQRCode' && (
-         <MapView
-         ref={mapRef}
-         style={styles.map}
-         initialRegion={{
-          latitude: 24.915668,
-          longitude: 67.089528,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
-         }}
-         showsUserLocation={true}
-         showsMyLocationButton={true}
-         onMapReady={() => setLoading(false)}
-       >
+            <MapView
+              ref={mapRef}
+              style={styles.map}
+              initialRegion={{
+                latitude: 24.91555,
+                longitude: 67.09194,
+                latitudeDelta: 0.001,
+                longitudeDelta: 0.001,
+              }}
+              showsUserLocation={true}
+              showsMyLocationButton={true}
+              onMapReady={() => setLoading(false)}
+            >
               {location && (
                 <Marker
                   coordinate={{ latitude: location.latitude, longitude: location.longitude }}
@@ -302,57 +343,49 @@ console.log(token)
                 </Marker>
               )}
 
-{bikeLocations.map((bike, index) => (
-          <Marker
-            key={bike.id}
-            coordinate={{ latitude: bike.latitude, longitude: bike.longitude }}
-            onPress={() => handleMarkerPress(stations[index]?.id)} // Fetch station details based on index
-          >
+              {bikeLocations.map((bike, index) => (
+                <Marker
+                  key={bike.id}
+                  coordinate={{ latitude: bike.latitude, longitude: bike.longitude }}
+                  onPress={() => handleMarkerPress(stations[index]?.id)} // Fetch station details based on index
+                >
                   <Image
                     source={require('../assets/mark.png')}
                     style={styles.bikeIcon}
                   />
-                   <Callout style={styles.calloutContainer}>
-                {/* <Text style={styles.calloutText}>Station ID: {stations[index]?.id}</Text> */}
-                {selectedStation && (
-                  <View style={styles.stationDetails}>
-                    <Text style={styles.detailText}>{selectedStation.StationArea}</Text>
-                    <Text style={styles.detailText}>Empty Docks: {selectedStation.emptyDocks}</Text>
-                    <Text style={styles.detailText}>Occupied Docks: {selectedStation.occupiedDocks}</Text>
-                  </View>
-                )}
-            </Callout>
+                  <Callout style={styles.calloutContainer}>
+                    {/* <Text style={styles.calloutText}>Station ID: {stations[index]?.id}</Text> */}
+                    {selectedStation && (
+                      <View style={styles.stationDetails}>
+                        <Text style={styles.detailText}>{selectedStation.StationArea}</Text>
+                        <Text style={styles.detailText}>Empty Docks: {selectedStation.emptyDocks}</Text>
+                        <Text style={styles.detailText}>Occupied Docks: {selectedStation.occupiedDocks}</Text>
+                      </View>
+                    )}
+                  </Callout>
                 </Marker>
               ))}
-{/* 
-{selectedStation && (
-        <View style={styles.stationDetails}>
-          <Text>Station Area: {selectedStation.StationArea}</Text>
-          <Text>Empty Docks: {selectedStation.emptyDocks}</Text>
-          <Text>Occupied Docks: {selectedStation.occupiedDocks}</Text>
-        </View>
-      )} */}
 
             </MapView>
-            
+
           )}
-  
-                <Toast />
+
+          <Toast />
 
           <View style={styles.buttonContainer}>
 
-          {/* { {rideState === 'scanReturnDock' (
+            {/* { {rideState === 'scanReturnDock' (
             
 
       )} } */}
 
-<Text style={styles.timerText}>
-  {rideState === 'scan' ? '' : `RIDE IN PROGRESS... ${formatTime(timer)}`}
-</Text>
+            <Text style={styles.timerText}>
+              {rideState === 'scan' ? '' : `RIDE IN PROGRESS... ${formatTime(timer)}`}
+            </Text>
 
 
             {(rideState === 'scan' || rideState === 'scanReturnDock') && (
-              
+
               <TouchableOpacity
                 style={styles.scanButton}
                 onPress={handleScanClick}
@@ -364,7 +397,7 @@ console.log(token)
                 <Text style={styles.buttonText}>
                   {rideState === 'scan' ? 'SCAN TO UNLOCK' : 'SCAN TO LOCK'}
                 </Text>
-             
+
               </TouchableOpacity>
             )}
 
@@ -372,53 +405,55 @@ console.log(token)
           </View>
 
           {(rideState === 'startRide' || rideState === 'endRide') && (
-       <View style={styles.actionButtonContainer}>
-       <TouchableOpacity
-         style={styles.actionButton}
-         onPress={rideState === 'startRide' ? handleStartRideClick : handleEndRideClick}
-       >
-         <Text style={styles.actionButtonText}>
-           {rideState === 'startRide' ? 'START RIDE' : 'END RIDE'}
-         </Text>
-       </TouchableOpacity>
-     </View>
-     
+            <View style={styles.actionButtonContainer}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={rideState === 'startRide' ? handleStartRideClick : handleEndRideClick}
+              >
+                <Text style={styles.actionButtonText}>
+                  {rideState === 'startRide' ? 'START RIDE' : 'END RIDE'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
           )}
 
           {(rideState === 'startRide' || rideState === 'endRide') && (
 
-        <View style={styles.rideDetailsContainer}>
-          
-          <View style={styles.stationWrapper}>
+            <View style={styles.rideDetailsContainer}>
 
-          <Text style={{ fontSize: 20, fontWeight: 'bold', top: -30,}}>CONFIRM YOUR RIDE</Text>
-          <View style={{ height: 2, // Thickness of the underline
-    width: 192, // Width of the underline (adjust as needed)
-    backgroundColor: 'black', // Color of the underline
-    opacity: 0.5, // Less opacity for the underline
-    marginTop: 0,
-    top: -30,}} />
+              <View style={styles.stationWrapper}>
 
-          <View style={styles.stationContainer1}>
-          <Image style={{ right: 10}}  source={require('../assets/qr.png')} />
-          <Text style={styles.rideDetailsText}>Scanned from: <Text style={styles.rideDetailsText1}> {rideDetails.stationName}</Text></Text>
-        </View>
+                <Text style={{ fontSize: 20, fontWeight: 'bold', top: -30, }}>CONFIRM YOUR RIDE</Text>
+                <View style={{
+                  height: 2, // Thickness of the underline
+                  width: 192, // Width of the underline (adjust as needed)
+                  backgroundColor: 'black', // Color of the underline
+                  opacity: 0.5, // Less opacity for the underline
+                  marginTop: 0,
+                  top: -30,
+                }} />
 
-        <View style={styles.stationContainer1}>
-          <Image style={{ right: 10, width: 20}} source={require('../assets/station.jpeg')} />
-          <Text style={styles.rideDetailsText}>Lock at the next Station</Text>
-        </View>
-          </View>
-  
+                <View style={styles.stationContainer1}>
+                  <Image style={{ right: 10 }} source={require('../assets/qr.png')} />
+                  <Text style={styles.rideDetailsText}>Scanned from: <Text style={styles.rideDetailsText1}> {rideDetails.stationName}</Text></Text>
+                </View>
+
+                <View style={styles.stationContainer1}>
+                  <Image style={{ right: 10, width: 20 }} source={require('../assets/station.jpeg')} />
+                  <Text style={styles.rideDetailsText}>Lock at the next Station</Text>
+                </View>
+              </View>
 
 
-        <View style={styles.bikeContainer}>
-          <Image source={require('../assets/bike-home.jpeg')} style={styles.bikeImage} />
-          <Text style={styles.rideDetailsText}>Bike ID: {rideDetails.bikeId}</Text>
-        </View>
-      </View>  
-      // </View>
-       
+
+              <View style={styles.bikeContainer}>
+                <Image source={require('../assets/bike-home.jpeg')} style={styles.bikeImage} />
+                <Text style={styles.rideDetailsText}>Bike ID: {rideDetails.bikeId}</Text>
+              </View>
+            </View>
+            // </View>
+
           )}
         </>
       )}
@@ -441,8 +476,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-
+    backgroundColor: 'transparent', // Change to transparent
   },
   loadingContainer: {
     flex: 1,
@@ -455,6 +489,7 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+
   },
   customIcon: {
     width: 40,
@@ -512,7 +547,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.2,
     borderBottomWidth: 0
   },
-  
+
   actionButton: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -530,14 +565,14 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   actionButtonText: {
-    fontSize: 24, 
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
   },
   rideDetailsContainer: {
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 10,
     bottom: 40
@@ -550,13 +585,13 @@ const styles = StyleSheet.create({
   },
   stationContainer1: {
     alignItems: 'center',
-       flexDirection: 'row',
+    flexDirection: 'row',
 
   },
   bikeContainer: {
     flex: 1,
-    justifyContent: 'center', 
-    alignItems: 'center', 
+    justifyContent: 'center',
+    alignItems: 'center',
 
   },
   bikeImage: {
@@ -574,30 +609,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'black',
     fontWeight: 'bold', // or use 'normal' for regular weight
-    
-  },
-  calloutContainer: {
-    alignItems: 'center',
 
   },
+  calloutContainer: {
+    alignItems: 'stretch',
+justifyContent: 'center',
+padding: 0
+  },
   calloutText: {
-    fontWeight: '700',
     color: '#333333', // Darker text color for contrast
     fontSize: 16, // Larger font size for emphasis
-    textAlign: 'center',
-    justifyContent: 'center',
-    marginBottom: 8, // Space between lines
+ 
   },
   stationDetails: {
- paddingHorizontal: 50,
- paddingVertical: 20,
-    alignSelf: 'center',
-    width: '90%', // Adjust width to be a bit smaller
-    maxWidth: 300, // Maximum width to prevent overflow
-  
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%', // Adjust width to be a bit smaller
+    maxWidth: 400, // Maximum width to prevent overflow
+    height: 100
+
   },
   detailText: {
-    fontSize: 15,
+ 
+
+    fontSize: 20,
     color: '#555555', // Dark grey color for text
     marginVertical: 5, // Vertical spacing between details
     textAlign: 'center',

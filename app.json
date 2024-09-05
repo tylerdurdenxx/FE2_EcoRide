@@ -12,7 +12,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.batmandev.ecoride"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,6 +25,11 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "devClient": true
+    "devClient": true,
+    "extra": {
+      "eas": {
+        "projectId": "6450aa3c-157c-4c8e-be51-9f9b74988b2d"
+      }
+    }
   }
 }

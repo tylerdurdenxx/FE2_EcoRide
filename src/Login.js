@@ -16,7 +16,8 @@ const Login = () => {
 
       if (token) {
         console.log('Token received:', token); // Debugging log to ensure token is received
-        navigation.navigate('Home', { token }); // Pass the token as a parameter
+        console.log(email)
+        navigation.navigate('Home', { token , email}); // Pass the token as a parameter
       } else {
         Alert.alert('Login Error', error || 'Login failed');
       }
